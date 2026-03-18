@@ -108,6 +108,84 @@ class HealthFoodService:
         # Check if we need to run an initial update on startup
         self._check_startup_update()
 
+    # --- Interaction Mapping (Internal Knowledge Base) ---
+    # Common drug-health food interactions based on clinical guidelines
+    INTERACTION_MAP = {
+        "WARFARIN": {
+            "魚油": "併用此保健品可能增加出血風險，請密切監測凝血指標（INR）並告知醫師。",
+            "FISH OIL": "併用此保健品可能增加出血風險，請密切監測凝血指標（INR）並告知醫師。",
+            "銀杏": "併用此保健品可能增加出血風險，請密切監測凝血指標（INR）並告知醫師。",
+            "GINKGO": "併用此保健品可能增加出血風險，請密切監測凝血指標（INR）並告知醫師。",
+            "大蒜": "併用此保健品可能增加出血風險，請告知醫師。",
+            "GARLIC": "併用此保健品可能增加出血風險，請告知醫師。",
+            "薑": "併用此保健品可能增加出血風險。",
+            "GINGER": "併用此保健品可能增加出血風險。",
+            "當歸": "當歸含有香豆素成分，併用可能增加出血風險。",
+            "紅麴": "紅麴與某些藥物併用可能增加肝負擔或肌肉痛風險。",
+            "RED YEAST RICE": "紅麴與某些藥物併用可能增加肝負擔或肌肉痛風險。",
+        },
+        "ASPIRIN": {
+            "魚油": "併用此保健品可能增加出血風險，請注意是否有異常瘀青或出血。",
+            "FISH OIL": "併用此保健品可能增加出血風險，請注意是否有異常瘀青或出血。",
+            "銀杏": "併用此保健品可能增加出血風險。",
+            "GINKGO": "併用此保健品可能增加出血風險。",
+        },
+        "CLOPIDOGREL": {
+            "魚油": "併用可能增加出血風險。",
+            "FISH OIL": "併用可能增加出血風險。",
+        },
+        "STATIN": {
+            "紅麴": "紅麴含有 Monacolin K (與 Statin 成分相似)，併用可能增加肝毒性或橫紋肌解離症風險。",
+            "RED YEAST RICE": "紅麴含有 Monacolin K (與 Statin 成分相似)，併用可能增加肝毒性或橫紋肌解離症風險。",
+        },
+        "SSRI": {
+            "聖約翰草": "可能增加血清素症候群風險（如震顫、發汗、意識模糊）。",
+            "ST. JOHN'S WORT": "可能增加血清素症候群風險（如震顫、發汗、意識模糊）。",
+        },
+        "ANTIBIOTIC": {
+            "益生菌": "抗生素可能會殺死益生菌，建議兩者服用時間至少間隔 2 小時，以維持益生菌活性。",
+            "PROBIOTICS": "Please take probiotics at least 2 hours apart from antibiotics to ensure effectiveness.",
+            "鈣片": "鈣會與某些抗生素（如 Quinolones 或 Tetracyclines）結合，降低吸收率，建議間隔至少 2-4 小時服用。",
+            "CALCIUM": "Calcium can bind with certain antibiotics (Quinolones or Tetracyclines), decreasing absorption. Take at least 2-4 hours apart.",
+        },
+        "LEVOTHYROXINE": {
+            "鈣片": "鈣片可能顯著降低甲狀腺素的吸收，建議兩者服用時間需間隔至少 4 小時。",
+            "CALCIUM": "Calcium supplements can significantly decrease the absorption of levothyroxine. Space them at least 4 hours apart.",
+        },
+        "BIPHOSPHONATE": {
+            "鈣片": "鈣會干擾雙磷酸鹽類藥物（骨質疏鬆藥）的吸收，建議空腹服用藥物後，至少間隔 30-60 分鐘再使用鈣片。",
+            "CALCIUM": "Calcium interferes with the absorption of bisphosphonates. Take at least 30-60 minutes apart after taking medication on an empty stomach.",
+        }
+    }
+
+    def check_medication_interactions(self, medications, health_food_name):
+        """
+        Check for known interactions between a list of medications and a health food.
+        """
+        warnings = []
+        hf_name_upper = health_food_name.upper()
+        
+        for med in medications:
+            med_upper = med.upper()
+            # Basic keyword matching for medication categories or names
+            matched_med = None
+            if "WARFARIN" in med_upper: matched_med = "WARFARIN"
+            elif "ASPIRIN" in med_upper or "阿斯匹靈" in med_upper: matched_med = "ASPIRIN"
+            elif "CLOPIDOGREL" in med_upper or "保栓通" in med_upper: matched_med = "CLOPIDOGREL"
+            elif any(s in med_upper for s in ["STATIN", "立普妥", "素清", "冠脂妥"]): matched_med = "STATIN"
+            elif any(s in med_upper for s in ["FLUOXETINE", "SERTRALINE", "ESCITALOPRAM", "百憂解"]): matched_med = "SSRI"
+            elif any(s in med_upper for s in ["AMOXICILLIN", "CIPRO", "LEVO", "CEPHAL", "抗生素", "賽普羅", "安蒙西林"]): matched_med = "ANTIBIOTIC"
+            elif any(s in med_upper for s in ["LEVOTHYROXINE", "昂妥舒", "甲狀素"]): matched_med = "LEVOTHYROXINE"
+            elif any(s in med_upper for s in ["FOSAMAX", "ALENDRONATE", "福善美"]): matched_med = "BIPHOSPHONATE"
+
+            if matched_med and matched_med in self.INTERACTION_MAP:
+                interaction_data = self.INTERACTION_MAP[matched_med]
+                for key, msg in interaction_data.items():
+                    if key in hf_name_upper:
+                        warnings.append(f"- 藥物 [{med}] 與保健品成分 [{key}]：{msg}")
+        
+        return "\n".join(warnings) if warnings else None
+
     def _get_last_monday(self):
         """Calculates the date of the most recent Monday."""
         now = datetime.now()
@@ -258,22 +336,46 @@ class HealthFoodService:
     def search_health_food(self, keyword: str):
         """
         Search for health foods by name or health benefit.
+        Includes keyword normalization for common terms.
         """
         if not os.path.exists(self.db_path):
             return "資料庫初始化中，請稍候..."
 
+        # 關鍵字正規化 (Mapping common terms to TFDA database conventions)
+        term_map = {
+            "鈣片": "鈣",
+            "益生菌": "乳酸菌",
+            "葉黃素": "金盞花",
+            "銀杏": "銀杏",
+        }
+        
+        normalized_keyword = term_map.get(keyword.strip(), keyword.strip())
+        
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        query = f"%{keyword}%"
-        sql = """
-            SELECT name_zh, license_number, category, health_benefit, health_claim, status
-            FROM health_foods
-            WHERE name_zh LIKE ? OR health_benefit LIKE ? OR health_claim LIKE ? OR functional_components LIKE ?
-            LIMIT 10
-        """
-        cursor.execute(sql, (query, query, query, query))
-        rows = cursor.fetchall()
+        def _perform_search(kw):
+            query = f"%{kw}%"
+            sql = """
+                SELECT name_zh, license_number, category, health_benefit, health_claim, status, warning, precautions
+                FROM health_foods
+                WHERE name_zh LIKE ? OR health_benefit LIKE ? OR health_claim LIKE ? OR functional_components LIKE ?
+                LIMIT 10
+            """
+            cursor.execute(sql, (query, query, query, query))
+            return cursor.fetchall()
+
+        # 1. 先用正規化後的關鍵字搜尋
+        rows = _perform_search(normalized_keyword)
+        
+        # 2. 如果沒結果且關鍵字不同，嘗試原始關鍵字
+        if not rows and normalized_keyword != keyword.strip():
+            rows = _perform_search(keyword.strip())
+            
+        # 3. 針對葉黃素的特殊處理 (如果還是沒結果)
+        if not rows and "葉黃素" in keyword:
+            rows = _perform_search("金盞花")
+
         conn.close()
 
         if not rows:
@@ -281,12 +383,15 @@ class HealthFoodService:
 
         results = []
         for r in rows:
+            warning_text = f"\n   ⚠️ 警語: {r[6]}" if r[6] and r[6] != "None" else ""
+            precaution_text = f"\n   ℹ️ 注意事項: {r[7]}" if r[7] and r[7] != "None" else ""
+            
             results.append(
                 f"【{r[1]}】 {r[0]}\n"
                 f"   類別: {r[2]}\n"
                 f"   保健功效: {r[3]}\n"
                 f"   功效宣稱: {r[4][:80]}{'...' if len(r[4]) > 80 else ''}\n"
-                f"   證況: {r[5]}"
+                f"   證況: {r[5]}{warning_text}{precaution_text}"
             )
 
         return "\n\n".join(results)

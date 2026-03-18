@@ -282,16 +282,25 @@ Based on the above retrieved data, please analyze:
 
 
 @mcp.tool()
-def search_health_food(keyword: str) -> str:
+def search_health_food(keyword: str, medications: str = "") -> str:
     """
     Search for Taiwan FDA approved health foods by name or health benefit.
-    Returns information including license number, category, health benefits, and claims.
-
+    
     Args:
-        keyword: Product name or health benefit (e.g., '靈芝', '調節血脂', '護肝').
+        keyword: Product name or health benefit (e.g., '靈芝', '調節血脂', '魚油').
+        medications: Optional comma-separated list of medications to check for interactions.
     """
-    log_info(f"Tool called: search_health_food with query='{keyword}'")
-    return health_food_service.search_health_food(keyword)
+    log_info(f"Tool called: search_health_food with query='{keyword}', meds='{medications}'")
+    
+    results = health_food_service.search_health_food(keyword)
+    
+    if medications:
+        med_list = [m.strip() for m in medications.split(",") if m.strip()]
+        interaction_warnings = health_food_service.check_medication_interactions(med_list, keyword)
+        if interaction_warnings:
+            results = f"<span style='color:#f59e0b;font-weight:bold'>⚠️ 【重要交互作用警示】</span>\n{interaction_warnings}\n\n" + results
+            
+    return results
 
 
 @mcp.tool()
